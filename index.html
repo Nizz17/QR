@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic QR Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0B0712',
+                        cardBg: '#130E22',
+                        brandPurple: '#7C3AED',
+                        brandGlow: '#A78BFA'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .purple-glow { box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); }
+    </style>
+</head>
+<body class="bg-darkBg text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-md bg-cardBg border border-purple-900/40 rounded-2xl p-6 purple-glow transition-all duration-300">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brandGlow to-brandPurple">
+                Secure QR Generator
+            </h1>
+            <p class="text-xs text-gray-400 mt-1">Self-destructs after first scan</p>
+        </div>
+
+        <div class="mb-5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-400 mb-2">Enter Any Data / Secret Text</label>
+            <input type="text" id="dataInput" value="Secret Data Package #1024" class="w-full bg-darkBg border border-purple-800 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brandPurple transition">
+        </div>
+
+        <button id="generateBtn" class="w-full bg-brandPurple hover:bg-purple-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 transform active:scale-[0.98] focus:outline-none mb-6 shadow-lg shadow-purple-950">
+            Generate Temporary QR Code
+        </button>
+
+        <div id="qrContainer" class="hidden flex flex-col items-center justify-center p-4 bg-white rounded-xl border border-purple-300/20 mb-4">
+            <div id="qrcode"></div>
+            <p class="text-xs text-slate-800 font-medium mt-3 text-center">Scan to consume data variable</p>
+        </div>
+        
+        <div id="statusMessage" class="text-sm text-center py-2 text-gray-400 hidden"></div>
+    </div>
+
+    <script>
+        const dataInput = document.getElementById('dataInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const qrContainer = document.getElementById('qrContainer');
+        const qrcodeDiv = document.getElementById('qrcode');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // 1. GENERATE SYSTEM (Creates a timestamped secure URL string)
+        generateBtn.addEventListener('click', () => {
+            const rawText = dataInput.value.trim();
+            if(!rawText) return showStatus('Please type some text data first!', true);
+
+            // Scrambles the text slightly so it isn't easily visible in plain text
+            const encodedData = btoa(encodeURIComponent(rawText));
+            
+            // Set expiration date token for 5 minutes into the future
+            const expireTimestamp = Date.now() + (5 * 60 * 1000); 
+            
+            // Generate a unique token ID for this specific scan sequence
+            const uniqueId = 'qr_' + Math.random().toString(36).substr(2, 9);
+
+            // Construct link back to this web app
+            const secureUrl = `${window.location.origin}${window.location.pathname}?data=${encodedData}&exp=${expireTimestamp}&token=${uniqueId}`;
+
+            qrcodeDiv.innerHTML = '';
+            qrContainer.classList.remove('hidden');
+
+            new QRCode(qrcodeDiv, {
+                text: secureUrl,
+                width: 200,
+                height: 200,
+                colorDark : "#0B0712",
+                colorLight : "#FFFFFF",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+
+            showStatus('QR Code Ready! Scan with your smartphone.', false);
+        });
+
+        // 2. CONSUME / VERIFY LOGIC (Runs instantly when a phone camera hits the page)
+        function checkScanParameters() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const dataParam = urlParams.get('data');
+            const expParam = urlParams.get('exp');
+            const tokenParam = urlParams.get('token');
+
+            if (!dataParam || !expParam || !tokenParam) return; // Exit if regular loading
+
+            const now = Date.now();
+            const expirationTime = parseInt(expParam);
+
+            // Check if this specific token was already scanned before on this phone
+            const alreadyScanned = localStorage.getItem(tokenParam);
+
+            if (alreadyScanned) {
+                alert("❌ [ACCESS DENIED]\nThis QR code has already been scanned and cannot be used again.");
+            } else if (now > expirationTime) {
+                alert("⏳ [EXPIRED]\nThis QR link has expired due to its timeout clock.");
+            } else {
+                // First successful scan! Instantly mark it used in the phone storage
+                localStorage.setItem(tokenParam, 'scanned');
+                
+                // Decrypt data string
+                const decryptedData = decodeURIComponent(atob(dataParam));
+                alert(`🔓 [SUCCESSFUL SCAN]\n\nData Payload:\n"${decryptedData}"\n\nThis QR is now deactivated.`);
+            }
+
+            // Wipe out url parameters immediately from navigation bar
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        function showStatus(text, isError) {
+            statusMessage.classList.remove('hidden');
+            statusMessage.textContent = text;
+            statusMessage.className = `text-sm text-center py-2 ${isError ? 'text-red-400' : 'text-purple-400'}`;
+        }
+
+        // Auto-run scanner verification when page pops open
+        checkScanParameters();
+    </script>
+</body>
+</html>
