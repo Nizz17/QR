@@ -1,0 +1,9 @@
+{
+      "rewrites": [
+        { "source": "/(.*)", "destination": "/index.html" }
+      ]
+    }
+    ```
+  
+  
+    Scroll down and click the green **Commit changes** button.
